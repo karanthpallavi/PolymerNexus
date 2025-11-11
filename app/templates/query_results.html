@@ -9,6 +9,20 @@
     <button onclick="downloadExcel()">Download as Excel</button>
 
     <style>
+        .ui-btn {
+  background:#33bdb1;
+  color:white;
+  padding:10px 18px;
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+  font-size:14px;
+  font-weight:600;
+  transition:background .3s, transform .1s;
+}
+.ui-btn:hover { background:#2ca398; }
+.ui-btn:active { transform:scale(.97); }
+
         table {
             border-collapse: collapse;
             width: 100%;
@@ -83,26 +97,35 @@
             .catch(error => console.error("Error downloading Excel:", error));
         }
     </script>
+
 </head>
 <body>
 
 <h1>SPARQL Query Results</h1>
 
-<!-- Display the table dynamically -->
-{% if results and results["head"]["vars"] %}
+{% if template_name in ["multi_property_comparison", "filter_by_single_quality"] %}
+<p style="font-weight: bold; color: green;">
+    Number of rows: {{ results|length }}
+</p>
+{% endif %}
+<div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+    <button class="ui-btn" onclick="window.location.href='/query'">← Back to Query</button>
+</div>
+
+{% if results and results|length > 0 %}
 <table>
     <thead>
     <tr>
-        {% for header in results["head"]["vars"] %}
+        {% for header in results[0].keys() %}
         <th>{{ header }}</th>
         {% endfor %}
     </tr>
     </thead>
     <tbody>
-    {% for row in results["results"]["bindings"] %}
+    {% for row in results %}
     <tr>
-        {% for header in results["head"]["vars"] %}
-        <td>{{ row[header]["value"] if header in row else "N/A" }}</td>
+        {% for key, val in row.items() %}
+        <td>{{ val.value }}</td>
         {% endfor %}
     </tr>
     {% endfor %}

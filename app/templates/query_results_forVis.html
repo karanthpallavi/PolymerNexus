@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PolymerNexus – Query Results</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.24.0/cytoscape.min.js"></script>
+    <style>
+        body {
+          font-family: Arial, sans-serif;
+          background-color: #f9f9f9;
+          padding: 20px;
+        }
+        h2 { color: #333; }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 20px;
+          background: white;
+        }
+        th, td {
+          border: 1px solid #ccc;
+          padding: 8px 10px;
+          text-align: left;
+        }
+        tr:hover {
+          background-color: #eef;
+          cursor: pointer;
+        }
+        th {
+          background-color: #444;
+          color: white;
+        }
+        #cy {
+          width: 100%;
+          height: 500px;
+          border: 2px solid #444;
+          display: none;
+          margin-top: 20px;
+          border-radius: 8px;
+        }
+        .button-bar {
+          margin-bottom: 10px;
+        }
+        .btn {
+          background-color: #1976D2;
+          color: white;
+          padding: 8px 14px;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
+          margin-right: 8px;
+        }
+        .btn:hover { background-color: #125aa3; }
+    </style>
+</head>
+<body>
+<h2>Query Results</h2>
+
+<div class="button-bar">
+    <button class="btn" onclick="window.location.href='/query'">Back to Query</button>
+</div>
+
+{% if results and results|length > 0 %}
+<p><b>{{ results|length }}</b> results found.</p>
+<table id="resultsTable">
+    <thead>
+    <tr>
+        {% for key in results[0].keys() %}
+        <th>{{ key }}</th>
+        {% endfor %}
+    </tr>
+    </thead>
+    <tbody>
+    {% for row in results %}
+    <tr>
+        {% for val in row.values() %}
+        <td>{{ val }}</td>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No results found.</p>
+{% endif %}
+
+<div id="cy"></div>
+
+<script>
+    const table = document.getElementById("resultsTable");
+    const cyContainer = document.getElementById("cy");
+    let cy;
+
+    if (table) {
+      table.querySelectorAll("tbody tr").forEach(row => {
+        row.addEventListener("click", () => {
+          const headers = Array.from(document.querySelectorAll("#resultsTable thead th"))
+                              .map(th => th.textContent.trim());
+          const cells = Array.from(row.children).map(td => td.textContent.trim());
+          const rowData = {};
+          headers.forEach((h, i) => rowData[h] = cells[i]);
+          visualizeRow(rowData);
+        });
+      });
+    }
+
+    function visualizeRow(data) {
+      const objectLabel = data.object;
+      if (!objectLabel) {
+        alert("No object label found for this row.");
+        return;
+      }
+
+      cyContainer.style.display = "block";
+      cyContainer.scrollIntoView({ behavior: "smooth" });
+
+      fetch(`/graph/object/${encodeURIComponent(objectLabel)}`)
+        .then(res => res.json())
+        .then(graphData => {
+          if (!graphData.elements) {
+            alert("No graph data found for this object.");
+            return;
+          }
+
+          if (cy) cy.destroy();
+
+          cy = cytoscape({
+            container: cyContainer,
+            elements: graphData.elements,
+            layout: { name: "cose", animate: true },
+            style: [
+              {
+                selector: "node",
+                style: {
+                  "background-color": ele => {
+                    const label = ele.data("label") || "";
+                    if (label.includes("Hardness") || label.includes("MSR"))
+                      return "#43A047";
+                    else if (label.match(/^[0-9]+(\.[0-9]+)?$/))
+                      return "#FFB300";
+                    return "#1976D2";
+                  },
+                  "label": "data(label)",
+                  "color": "#fff",
+                  "text-valign": "center",
+                  "text-outline-width": 2,
+                  "text-outline-color": "#555",
+                  "font-size": "12px"
+                }
+              },
+              {
+                selector: "edge",
+                style: {
+                  "width": 2,
+                  "line-color": "#999",
+                  "target-arrow-color": "#999",
+                  "target-arrow-shape": "triangle",
+                  "curve-style": "bezier",
+                  "label": "data(label)",
+                  "font-size": "10px",
+                  "color": "#000",
+                  "text-background-opacity": 1,
+                  "text-background-color": "#fff",
+                  "text-background-shape": "roundrectangle",
+                  "text-background-padding": 2
+                }
+              }
+            ]
+          });
+
+          cy.fit();
+        })
+        .catch(err => {
+          console.error("Error loading graph:", err);
+          alert("Error loading graph data. See console for details.");
+        });
+    }
+</script>
+</body>
+</html>

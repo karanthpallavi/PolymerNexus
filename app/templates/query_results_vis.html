@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>SPARQL Query Results</title>
+
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+
+    <style>
+        body { font-family: "Roboto", sans-serif; margin: 0; padding: 20px; background: #f7f9f9; }
+        h1 { text-align: center; margin-bottom: 10px; }
+        #results-container { max-width: 1100px; margin: 0 auto; background: #fff; padding: 18px; border-radius: 10px; box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
+        table { width:100%; border-collapse: collapse; margin-bottom:16px; }
+        thead th { background:#33bdb1; color:#fff; padding:10px; text-align:left; }
+        td { padding:10px; border-bottom:1px solid #eee; }
+        tr:hover { background:#f0fafa; cursor:pointer; }
+        #cy { width:100%; height:420px; border-radius:8px; border:1px solid #e0f0ef; background:#fff; }
+        .info { color:#666; font-size:14px; margin-bottom:12px; }
+        .error { color: #b00020; font-weight:600; }
+        #debug { font-family: monospace; font-size:12px; color:#666; margin-top:10px; display:none; white-space:pre-wrap; background:#fafafa; padding:10px; border-radius:6px; border:1px solid #eee; }
+    </style>
+</head>
+<body>
+<h1>Query Results</h1>
+
+<div id="results-container">
+    <div class="info">Click a row to visualize that object's measurements in the graph below.</div>
+    <div id="results-table"></div>
+
+    <h2 style="margin:10px 0 6px 0;">Graph View</h2>
+    <div class="info">Graph shows the selected object (center) and connected qualities (nodes). Edge labels show values.</div>
+    <div id="cy"></div>
+
+    <div id="debug"></div>
+</div>
+
+<script>
+    /*
+      This template expects Flask to inject `results` as a JSON array of SPARQL bindings:
+        results = [
+          {"object": {"type":"literal","value":"Sample_1"}, "prop1": {"value":"Hardness"}, ...},
+          ...
+        ]
+
+      If your variable name differs, the rendering below will still attempt to find the "object" column.
+    */
+
+    const results = {{ results|tojson | safe }} || [];
+
+    let cyInstance = null;   // global cytoscape instance
+
+    function logDebug(msg) {
+      console.log(msg);
+      const dbg = document.getElementById("debug");
+      dbg.style.display = "block";
+      dbg.textContent += msg + "\n";
+    }
+
+    // Render the table from results (robust to different column names)
+    function renderTable() {
+      const container = document.getElementById("results-table");
+      container.innerHTML = "";
+
+      if (!Array.isArray(results) || results.length === 0) {
+        container.innerHTML = "<p>No results were returned by the query.</p>";
+        return;
+      }
+
+      // Determine header columns from the first row's keys
+      const first = results[0];
+      const columns = Object.keys(first);
+      const headerHtml = "<tr>" + columns.map(c => `<th>${escapeHtml(c)}</th>`).join("") + "</tr>";
+
+      // Build rows
+      const rowsHtml = results.map((row, idx) => {
+        const cells = columns.map(col => {
+          const val = (row[col] && row[col].value !== undefined) ? row[col].value : "";
+          return `<td>${escapeHtml(val)}</td>`;
+        }).join("");
+        return `<tr data-index="${idx}">${cells}</tr>`;
+      }).join("");
+
+      container.innerHTML = `<table><thead>${headerHtml}</thead><tbody>${rowsHtml}</tbody></table>`;
+    }
+
+    // Attach click handlers after table exists
+    function attachRowHandlers() {
+      const trs = document.querySelectorAll("#results-table tbody tr");
+      if (!trs || trs.length === 0) {
+        logDebug("No table rows found to attach handlers.");
+        return;
+      }
+
+      trs.forEach(tr => {
+        tr.addEventListener("click", async (ev) => {
+          const idx = tr.getAttribute("data-index");
+          const rowObj = results[Number(idx)];
+          if (!rowObj) {
+            console.warn("Row data not found for index:", idx);
+            return;
+          }
+
+          // find the best "object" key: look for keys containing 'object' or 'sample' or 'label'
+          const keys = Object.keys(rowObj);
+          let objectKey = keys.find(k => /object/i.test(k));
+          if (!objectKey) objectKey = keys.find(k => /sample|label|name|id/i.test(k));
+          // fallback to first column if nothing matches
+          if (!objectKey) objectKey = keys[0];
+
+          const candidate = rowObj[objectKey];
+          if (!candidate || !candidate.value) {
+            alert("Could not determine object label from that row. See console for details.");
+            console.warn("Row object candidate missing:", { row: rowObj, objectKey });
+            return;
+          }
+
+          const objectLabel = candidate.value;
+          logDebug(`Row clicked: index=${idx} objectKey=${objectKey} objectLabel=${objectLabel}`);
+
+          // Show a tiny loading indicator by replacing graph container text
+          document.getElementById("cy").innerHTML = "Loading graph for: " + escapeHtml(objectLabel) + "...";
+
+          try {
+            await loadGraph(objectLabel);
+          } catch (err) {
+            console.error("Error loading graph:", err);
+            alert("Failed to load graph for " + objectLabel + ". See console for details.");
+            document.getElementById("cy").innerHTML = "";
+          }
+        });
+      });
+    }
+
+    // Load graph data from backend
+    async function loadGraph(objectLabel) {
+      // send object_label in body (backend accepts this)
+      const resp = await fetch("/vis_graph", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ object_label: objectLabel })
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text();
+        console.error("Graph endpoint error:", resp.status, txt);
+        document.getElementById("cy").innerHTML = "<div class='error'>Error fetching graph data (see console)</div>";
+        return;
+      }
+
+      const payload = await resp.json();
+
+      // payload should be an array of bindings: [{ quality: {value:"..."}, value:{value:"..."} }, ...]
+      if (!Array.isArray(payload)) {
+        console.warn("Unexpected payload from /vis_graph:", payload);
+        document.getElementById("cy").innerHTML = "<div class='error'>Unexpected graph response format - see console</div>";
+        return;
+      }
+
+      drawGraph(objectLabel, payload);
+    }
+
+    // draw graph using Cytoscape, clearing previous instance if any
+    function drawGraph(centerLabel, bindings) {
+      // build unique nodes & edges
+      const nodeMap = new Map();
+      // center node
+      nodeMap.set(centerLabel, { data: { id: centerLabel, label: centerLabel, type: "object" } });
+
+      const edges = [];
+
+      bindings.forEach((b, i) => {
+        // support different variable names: quality / prop / predicate
+        const qKey = Object.keys(b).find(k => /quality|prop|predicate|property|label/i.test(k)) || "quality";
+        const vKey = Object.keys(b).find(k => /value|numeric|val|measurement/i.test(k)) || "value";
+
+        const q = (b[qKey] && b[qKey].value) ? b[qKey].value : (`quality_${i}`);
+        const v = (b[vKey] && b[vKey].value) ? b[vKey].value : "";
+
+        // create quality node if not exists
+        if (!nodeMap.has(q)) {
+          nodeMap.set(q, { data: { id: q, label: q, type: "quality" } });
+        }
+
+        // create an edge (center -> quality) with label = value
+        edges.push({ data: { id: `${centerLabel}__${q}`, source: centerLabel, target: q, label: v } });
+      });
+
+      // Prepare elements as arrays (cytoscape expects array)
+      const nodes = Array.from(nodeMap.values());
+      const elements = nodes.concat(edges);
+
+      // Destroy existing instance cleanly to avoid DOM conflicts
+      if (cyInstance && typeof cyInstance.destroy === "function") {
+        try { cyInstance.destroy(); } catch (e) { console.warn("cy destroy failed", e); }
+        cyInstance = null;
+      }
+
+      // Create new cytoscape instance
+      cyInstance = cytoscape({
+        container: document.getElementById("cy"),
+        elements,
+        style: [
+          { selector: 'node[type="object"]', style: { "background-color": "#1f8a7b", "label": "data(label)", "color": "#fff", "text-valign": "center", "text-halign": "center", "font-size":"12px", "width": 70, "height": 70 } },
+          { selector: 'node[type="quality"]', style: { "background-color": "#33bdb1", "label": "data(label)", "color": "#fff", "text-valign": "center", "text-halign": "center", "font-size":"11px", "width": 52, "height": 52 } },
+          { selector: 'edge', style: { "label": "data(label)", "font-size": "10px", "line-color": "#bfcfcf", "target-arrow-shape": "triangle", "target-arrow-color": "#bfcfcf", "curve-style": "bezier" } }
+        ],
+        layout: { name: 'cose', animate: true, randomize: false, nodeRepulsion: 4000, idealEdgeLength: 120 }
+      });
+
+      // add simple click handler for nodes to show a popup (native alert for simplicity)
+      cyInstance.on('tap', 'node', function(evt){
+        const node = evt.target;
+        alert(`Node: ${node.data('label')}`);
+      });
+    }
+
+    // small helper to escape text into HTML
+    function escapeHtml(s) {
+      if (s === undefined || s === null) return "";
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    // Initialize UI
+    (function init(){
+      try {
+        renderTable();
+        attachRowHandlers();
+        logDebug("Rendered table and attached handlers. Rows: " + (results.length || 0));
+      } catch (e) {
+        console.error("Init error:", e);
+        logDebug("Init error: " + e.toString());
+      }
+    })();
+</script>
+</body>
+</html>

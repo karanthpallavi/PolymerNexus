@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SPARQL Query Form</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 20px;
+            padding: 20px;
+            text-align: center;
+        }
+        form {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            display: inline-block;
+            text-align: left;
+        }
+        textarea, select, input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #a6f5f0;
+            color: black;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #8edbd5;
+        }
+    </style>
+    <script>
+        function updateQueryFields() {
+            const container = document.getElementById("dynamic-fields");
+            const template = document.getElementById("template").value;
+            container.innerHTML = "";
+
+            if (template === "filter_by_single_quality") {
+                container.innerHTML = `
+                    <label for="property">Select Property:</label><br>
+                    <select name="property" required>
+                        <option value="">-- Select --</option>
+                        <option value="Hardness">Hardness mean value</option>
+                        <option value="Mooney Stress Relaxation">Mooney Stress Relaxation</option>
+                        <option value="Styrene">Styrene_Cont</option>
+                        <option value="Cis_Cont">Cis_Cont</option>
+                        <option value="Glass Transition Temperature">Glass Transition Temperature</option>
+                        <option value="Mooney Viscosity">Mooney Viscosity</option>
+                        <option value="Number Averaged Molecular Weight">Number Averaged Molecular Weight</option>
+                        <option value="Weight Averaged Molecular Weight">Weight Averaged Molecular Weight</option>
+                        <option value="Vinyl_Cont">Vinyl_Cont</option>
+                        <option value="Trans_Cont">Trans_Cont</option>
+                    </select><br>
+
+                    <label for="operator">Select Comparison:</label><br>
+                    <select name="operator" required>
+                        <option value="above">Above</option>
+                        <option value="below">Below</option>
+                        <option value="equals">Equals</option>
+                        <option value="range">Within Range</option>
+                    </select><br>
+
+                    <label for="value1">Value 1:</label><br>
+                    <input type="number" name="value1" step="any" required><br>
+
+                    <div id="range-field" style="display:none;">
+                        <label for="value2">Value 2:</label><br>
+                        <input type="number" name="value2" step="any"><br>
+                    </div>
+                `;
+
+                setTimeout(() => {
+                    const opSelect = document.querySelector('select[name="operator"]');
+                    opSelect.addEventListener('change', () => {
+                        document.getElementById("range-field").style.display =
+                            opSelect.value === "range" ? "block" : "none";
+                    });
+                }, 100);
+            }
+
+            if (template === "multi_property_comparison") {
+                container.innerHTML = `
+                    <label>Property 1:</label><br>
+                    <select name="property1" required>
+                        <option value="Hardness_mean_value">Hardness_mean_value</option>
+                        <option value="Mooney Stress Relaxation">Mooney Stress Relaxation</option>
+                        <option value="Styrene">Styrene_Cont</option>
+                        <option value="Cis_Cont">Cis_Cont</option>
+                        <option value="Glass Transition Temperature">Glass Transition Temperature</option>
+                        <option value="Mooney Viscosity">Mooney Viscosity</option>
+                        <option value="Number Averaged Molecular Weight">Number Averaged Molecular Weight</option>
+                        <option value="Weight Averaged Molecular Weight">Weight Averaged Molecular Weight</option>
+                        <option value="Vinyl_Cont">Vinyl_Cont</option>
+                        <option value="Trans_Cont">Trans_Cont</option>
+                        <option value="D Median">D Median</option>
+                        <option value="E_dash_0_degree_celcius">E_dash_0_degree_celcius</option>
+                        <option value="E_dash_23_degree_celcius">E_dash_23_degree_celcius</option>
+                        <option value="E_dash_60_degree_celcius">E_dash_60_degree_celcius</option>
+                        <option value="E_double_dash_0_degree_celcius">E_double_dash_0_degree_celcius</option>
+                        <option value="E_double_dash_23_degree_celcius">E_double_dash_23_degree_celcius</option>
+                        <option value="E_double_dash_60_degree_celcius">E_double_dash_60_degree_celcius</option>
+                        <option value="ElasticModulus_G_dash_15_percent_1_Messung">ElasticModulus_G_dash_15_percent_1_Messung</option>
+                        <option value="ElasticModulus_G_dash_zero_point_five_percent_1_Messung">ElasticModulus_G_dash_zero_point_five_percent_1_Messung</option>
+                        <option value="F Median">F Median</option>
+                        <option value="LossModulus_Gdouble_dash(max)">LossModulus_Gdouble_dash(max)</option>
+                        <option value="ML 1+1">ML 1+1</option>
+                        <option value="ML 1+4">ML 1+4</option>
+                        <option value="MSR">MSR</option>
+                        <option value="Masse pro Messzeit_1">Masse pro Messzeit_1</option>
+                        <option value="Masse pro Messzeit_2">Masse pro Messzeit_2</option>
+                        <option value="Massedruck_1">Massedruck_1</option>
+                        <option value="Massedruck_2">Massedruck_2</option>
+                        <option value="Quellung Hausmethode K10_1">Quellung Hausmethode K10_1</option>
+                        <option value="Quellung Hausmethode K10_2">Quellung Hausmethode K10_2</option>
+                        <option value="Rebound_mean_value_1">Rebound_mean_value_1</option>
+                        <option value="Rebound_mean_value_2">Rebound_mean_value_2</option>
+                        <option value="S50">S50</option>
+                        <option value="S100">S100</option>
+                        <option value="S300">S300</option>
+                        <option value="S_dash bei 90percent Umsatz">S_dash bei 90percent Umsatz</option>
+                        <option value="Temperatur tan d max">Temperatur tan d max</option>
+                        <option value="Umsatzzeit 90percent">Umsatzzeit 90percent</option>
+                        <option value="tan_d_7_percent_1_Messung">tan_d_7_percent_1_Messung</option>
+                        <option value="tand d max">tand d max</option>
+                    </select><br>
+
+                    <label>Comparison 1:</label><br>
+                    <select name="comparison1" required>
+                        <option value="greater">Greater Than</option>
+                        <option value="less">Less Than</option>
+                    </select><br>
+
+                    <label for="value1">Value 1:</label><br>
+                    <input type="number" name="value1" step="any" required><br>
+
+                    <label>Property 2:</label><br>
+                    <select name="property2" required>
+                        <option value="Hardness_mean_value">Hardness_mean_value</option>
+                        <option value="Mooney Stress Relaxation">Mooney Stress Relaxation</option>
+                        <option value="Styrene">Styrene_Cont</option>
+                        <option value="Cis_Cont">Cis_Cont</option>
+                        <option value="Glass Transition Temperature">Glass Transition Temperature</option>
+                        <option value="Mooney Viscosity">Mooney Viscosity</option>
+                        <option value="Number Averaged Molecular Weight">Number Averaged Molecular Weight</option>
+                        <option value="Weight Averaged Molecular Weight">Weight Averaged Molecular Weight</option>
+                        <option value="Vinyl_Cont">Vinyl_Cont</option>
+                        <option value="Trans_Cont">Trans_Cont</option>
+                        <option value="D Median">D Median</option>
+                        <option value="E_dash_0_degree_celcius">E_dash_0_degree_celcius</option>
+                        <option value="E_dash_23_degree_celcius">E_dash_23_degree_celcius</option>
+                        <option value="E_dash_60_degree_celcius">E_dash_60_degree_celcius</option>
+                        <option value="E_double_dash_0_degree_celcius">E_double_dash_0_degree_celcius</option>
+                        <option value="E_double_dash_23_degree_celcius">E_double_dash_23_degree_celcius</option>
+                        <option value="E_double_dash_60_degree_celcius">E_double_dash_60_degree_celcius</option>
+                        <option value="ElasticModulus_G_dash_15_percent_1_Messung">ElasticModulus_G_dash_15_percent_1_Messung</option>
+                        <option value="ElasticModulus_G_dash_zero_point_five_percent_1_Messung">ElasticModulus_G_dash_zero_point_five_percent_1_Messung</option>
+                        <option value="F Median">F Median</option>
+                        <option value="LossModulus_Gdouble_dash(max)">LossModulus_Gdouble_dash(max)</option>
+                        <option value="ML 1+1">ML 1+1</option>
+                        <option value="ML 1+4">ML 1+4</option>
+                        <option value="MSR">MSR</option>
+                        <option value="Masse pro Messzeit_1">Masse pro Messzeit_1</option>
+                        <option value="Masse pro Messzeit_2">Masse pro Messzeit_2</option>
+                        <option value="Massedruck_1">Massedruck_1</option>
+                        <option value="Massedruck_2">Massedruck_2</option>
+                        <option value="Quellung Hausmethode K10_1">Quellung Hausmethode K10_1</option>
+                        <option value="Quellung Hausmethode K10_2">Quellung Hausmethode K10_2</option>
+                        <option value="Rebound_mean_value_1">Rebound_mean_value_1</option>
+                        <option value="Rebound_mean_value_2">Rebound_mean_value_2</option>
+                        <option value="S50">S50</option>
+                        <option value="S100">S100</option>
+                        <option value="S300">S300</option>
+                        <option value="S_dash bei 90percent Umsatz">S_dash bei 90percent Umsatz</option>
+                        <option value="Temperatur tan d max">Temperatur tan d max</option>
+                        <option value="Umsatzzeit 90percent">Umsatzzeit 90percent</option>
+                        <option value="tan_d_7_percent_1_Messung">tan_d_7_percent_1_Messung</option>
+                        <option value="tand d max">tand d max</option>
+                    </select><br>
+
+                    <label>Comparison 2:</label><br>
+                    <select name="comparison2" required>
+                        <option value="greater">Greater Than</option>
+                        <option value="less">Less Than</option>
+                    </select><br>
+
+                    <label for="value2">Value 2:</label><br>
+                    <input type="number" name="value2" step="any" required><br>
+                `;
+            }
+        }
+    </script>
+</head>
+<body>
+<h1>SPARQL Query Form</h1>
+<form action="/query" method="POST">
+    <label for="template">Query Template:</label><br>
+    <select id="template" name="template" onchange="updateQueryFields()" required>
+        <option value="">-- Select Template --</option>
+        <option value="filter_by_single_quality">Above / Below / Range</option>
+        <option value="multi_property_comparison">Multiple Property Comparison</option>
+    </select><br>
+
+    <div id="dynamic-fields">
+        <!-- Dynamic input fields appear here -->
+    </div>
+
+    <button type="submit">Run Query</button>
+</form>
+</body>
+</html>

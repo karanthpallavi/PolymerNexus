@@ -231,15 +231,22 @@
                     </select>
 
                     <label>Comparison 1:</label>
-                    <select name="comparison1" required>
+                    <select name="comparison1" class="comp1" required>
                         <option value="greater">Greater Than</option>
                         <option value="less">Less Than</option>
+                        <option value="equals">Equals</option>
+                        <option value="range">Within Range</option>
                     </select>
 
-                    <label for="value1">Value 1:</label>
-                    <input type="number" name="value1" step="any" required>
+        <label>Value 1:</label>
+        <input type="number" name="value1" step="any" required>
 
-                    <hr style="margin:20px 0; border:none; border-top:1px solid #eee;">
+        <div id="range1-field" style="display:none;">
+            <label>Value 1 (Upper):</label>
+            <input type="number" name="value1b" step="any">
+        </div>
+
+        <hr style="margin:20px 0; border:none; border-top:1px solid #eee;">
 
                     <label>Property 2:</label>
                     <select name="property2" required>
@@ -287,15 +294,47 @@
                     </select>
 
                     <label>Comparison 2:</label>
-                    <select name="comparison2" required>
+                    <select name="comparison2" class="comp2" required>
                         <option value="greater">Greater Than</option>
                         <option value="less">Less Than</option>
+                        <option value="equals">Equals</option>
+                        <option value="range">Within Range</option>
                     </select>
 
-                    <label for="value2">Value 2:</label>
-                    <input type="number" name="value2" step="any" required>
-                `;
-            }
+        <label>Value 2:</label>
+        <input type="number" name="value2" step="any" required>
+
+        <div id="range2-field" style="display:none;">
+            <label>Value 2 (Upper):</label>
+            <input type="number" name="value2b" step="any">
+        </div>
+    `;
+
+    // === Range toggle logic (same as single quality) ===
+    setTimeout(() => {
+        const c1 = document.querySelector(".comp1");
+        const c2 = document.querySelector(".comp2");
+
+        const range1Field = document.getElementById("range1-field");
+        const range2Field = document.getElementById("range2-field");
+
+        c1.addEventListener("change", () => {
+            const isRange = c1.value === "range";
+            range1Field.style.display = isRange ? "block" : "none";
+            const input = range1Field.querySelector("input");
+            input.required = isRange;
+            if (!isRange) input.value = "";
+        });
+
+        c2.addEventListener("change", () => {
+            const isRange = c2.value === "range";
+            range2Field.style.display = isRange ? "block" : "none";
+            const input = range2Field.querySelector("input");
+            input.required = isRange;
+            if (!isRange) input.value = "";
+        });
+    }, 100);
+}
             if (template === "max_value_query") {
                 container.innerHTML = `
                 <label for="property">Select Property:</label>

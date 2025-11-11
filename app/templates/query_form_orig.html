@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SPARQL Query Form</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 20px;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+        }
+        form {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            display: inline-block;
+            text-align: left;
+        }
+        textarea, select, input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #a6f5f0;
+            color: black;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #8edbd5;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+    <script>
+        function updateForm() {
+            var schema = document.getElementById("schema").value;
+            var measurementFields = document.getElementById("measurement-fields");
+
+            if (schema === "measurement") {
+                measurementFields.classList.remove("hidden");
+                fetchSlots(); // Load slots dynamically
+            } else {
+                measurementFields.classList.add("hidden");
+            }
+        }
+
+        function fetchSlots() {
+        fetch('/get_slots')
+            .then(response => response.json())
+            .then(data => {
+                console.log("Fetched slots:", data);  // Debug: Print fetched data
+
+                let slotSelect = document.getElementById("measurement_slot");
+                slotSelect.innerHTML = "<option value=''>-- Select Slot --</option>"; // Reset options
+
+                data.forEach(entry => {
+                    let option = document.createElement("option");
+                    option.value = entry.slot_name;
+                    option.textContent = `${entry.slot_name} (${entry.range_name})`;
+                    slotSelect.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Error fetching slots:', error));
+    }
+        window.onload = function() {
+            document.getElementById("query").value = `
+PREFIX iao: <http://purl.obolibrary.org/obo/iao.owl/>
+PREFIX obi: <http://purl.obolibrary.org/obo/obi.owl/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX schema: <http://schema.org/>
+PREFIX pmd: <https://w3id.org/pmd/co/>
+PREFIX obo: <http://purl.obolibrary.org/obo/>
+PREFIX bfo: <http://purl.obolibrary.org/obo/bfo.owl/>
+PREFIX isk: <https://tib.eu/ontologies/isk/>
+PREFIX time: <http://www.w3.org/2006/time/>
+PREFIX stato: <http://purl.obolibrary.org/stato.owl/>
+
+SELECT ?object ?quality ?numericvalue ?unit WHERE {
+    ?smd rdf:type iao:IAO_0000032. #Scalar Measurement Datum
+    ?smd iao:IAO_0000221 ?quality_uri. #Quality
+    iao:IAO_0000136 rdfs:label ?isAbout.
+    ?smd iao:IAO_0000136 ?object_uri.  #Object
+    ?smd obi:OBI_0001938 ?valuespec. #Value specification
+    obi:OBI_0001938 rdfs:label ?hasValSpec.
+    ?valuespec obi:OBI_0001937 ?numericvalue. #Numeric Value for Quality
+    obi:OBI_0001937 rdfs:label ?hasSpecNumVal.
+    ?valuespec iao:IAO_0000039 ?unitInstance.
+    ?unitInstance rdfs:label ?unit.
+    ?object_uri rdfs:label ?object.
+    ?quality_uri rdfs:label ?quality.
+
+    #FILTER( regex(str(?smd),"https://tib.eu/ontologies/isk/411494_7022E_SMD_Trans_Cont"))
+    #FILTER( regex(str(?object),"https://tib.eu/ontologies/isk/447567_7057D"))
+    #FILTER(regex(str(?quality),"https://tib.eu/ontologies/isk/Cis_Cont"))
+    #FILTER(regex(str(?numericvalue),"13.9^^xsd:float"))
+}`;
+            document.getElementById("nl_query").value = "Get all qualities, values from Arlanxeo Raw Data Repository";
+        };
+    </script>
+</head>
+<body>
+<h1>SPARQL Query</h1>
+<form action="/query" method="POST">
+    <label for="schema">Select Schema:</label><br>
+    <select id="schema" name="schema" onchange="updateForm()">
+        <option value="">-- Select --</option>
+        <option value="measurement">Measurement</option>
+    </select><br>
+
+    <div id="measurement-fields" class="hidden">
+        <label for="measurement_slot">Measurement Slots:</label><br>
+        <select id="measurement_slot" name="measurement_slots[]" multiple>
+            <option value="">-- Select Slots --</option>
+        </select><br>
+    </div>
+
+    <label for="query">SPARQL Query:</label><br>
+    <textarea id="query" name="query" rows="10" cols="80"></textarea><br>
+
+    <label for="nl_query">Natural Language Query:</label><br>
+    <textarea id="nl_query" name="nl_query" rows="5" cols="80"></textarea><br>
+
+    <button type="submit">Run Query</button>
+</form>
+</body>
+</html>
