@@ -21,12 +21,12 @@ PROPERTY_LABEL_MAP = {
     "MSR": "MSR",
     "Mooney Stress Relaxation": "Mooney Stress Relaxation",
     "Mooney": "Mooney Stress Relaxation",  # keep if older forms still send this
-    "Hardness": "Hardness_mean_value",
-    "Styrene": "Styrene_Cont",
-    "Vinyl": "Vinyl_Cont",
+    "Hardness": "Hardness mean value",
+    "Styrene": "Styrene Content",
+    "Vinyl": "Vinyl Content",
     "GlassTransition": "Glass transition temperature",
-    "Cis": "Cis_Cont",
-    "Trans": "Trans_Cont",
+    "Cis": "Cis Content",
+    "Trans": "Trans Content",
     # add more mappings here as needed
 }
 # Check allowed file extensions
@@ -49,6 +49,17 @@ def generate_progress_messages():
         yield f"data:{step}\n\n"
         time.sleep(1)  # Simulate processing time
 
+"""generate_csv endpoint will download csv for query results
+
+:param No parameters, defaults to [DefaultParamVal]
+:type No parameters
+...
+:raises [400]: No data recieved - query may not have returned results
+:raises [500]: unfulfilled request - something went wrong - generic catch all error
+...
+:return: CSV file of sparql query results
+:rtype: file
+"""
 @bp.route("/generate_csv", methods=["POST"])
 def generate_csv():
     try:
@@ -74,6 +85,17 @@ def generate_csv():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+""" Function generate_excel downloads excel file of SPARQL Query results
+
+:param No paramaters
+:type No parameters
+...
+:raises [400]: No data recieved - query may not have returned results
+:raises [500]: unfulfilled request - something went wrong - generic catch all error
+...
+:return: Excel file of SPARQL Query results downloaded
+:rtype: Excel file
+"""
 @bp.route("/generate_excel", methods=["POST"])
 def generate_excel():
     try:
@@ -105,10 +127,30 @@ def generate_excel():
         return jsonify({"error": str(e)}), 500
 
 # Home route
+"""Default route - to upload CSV raw data for transformation to Graph
+
+:param No Parameters - UI asks to upload CSV file for transformation to Graph
+:type No Parameters - UI asks to upload CSV file for transformation to Graph
+...
+:raises [ErrorType]: [ErrorDescription]
+...
+:return: No return value, CSV file transformed to Graph and uploaded in GraphDB
+:rtype: None
+"""
 @bp.route('/')
 def home():
     return render_template('upload.html')
 
+"""upload route - to upload CSV raw data for transformation to Graph
+
+:param No Parameters - UI asks to upload CSV file for transformation to Graph
+:type No Parameters - UI asks to upload CSV file for transformation to Graph
+...
+:raises [ErrorType]: [ErrorDescription]
+...
+:return: No return value, CSV file transformed to Graph and uploaded in GraphDB
+:rtype: None
+"""
 # Upload route
 @bp.route('/upload', methods=['POST'])
 def upload_file():
@@ -168,6 +210,16 @@ def upload_file():
     except Exception as e:
         return f"An error occurred: {e}"
 
+"""Function to construct filter comparison operator based on inputs of the end user from UI
+Unused function - can be ignored
+:param label_var: [ParamDescription], defaults to [DefaultParamVal]
+:type [ParamName]: [ParamType](, optional)
+...
+:raises [ErrorType]: [ErrorDescription]
+...
+:return: [ReturnDescription]
+:rtype: [ReturnType]
+"""
 def make_filter(label_var, value_var, comparison, threshold, quality_label):
     op = ">" if comparison == "greater" else "<"
     return f'''
@@ -175,6 +227,14 @@ def make_filter(label_var, value_var, comparison, threshold, quality_label):
         FILTER(?{value_var} {op} {threshold})
     '''
 
+""" build_max_value_query function to construct SPARQL query to find maximum value of a quality of polymer
+
+:param property_label: label of the quality for which maximum value present in the graph is retrieved
+:type property_label: string
+...
+:return: SPARQL Query
+:rtype: string
+"""
 def build_max_value_query(property_label):
     return f"""
 PREFIX iao: <http://purl.obolibrary.org/obo/iao.owl/>
@@ -212,6 +272,14 @@ WHERE {{
 }}
 """
 
+""" build_min_value_query function to construct SPARQL query to find minimum value of a quality of polymer
+
+:param property_label: label of the quality for which minimum value present in the graph is retrieved
+:type property_label: string
+...
+:return: SPARQL Query
+:rtype: string
+"""
 def build_min_value_query(property_label):
     return f"""
 PREFIX iao: <http://purl.obolibrary.org/obo/iao.owl/>
@@ -249,9 +317,35 @@ WHERE {{
 }}
 """
 
+""" get_label_for_property function returns property label from the property map
+
+:param key: key to retrieve the value from PROPERTY_LABEL_MAP
+:type key: string
+...
+:return: hash value in the map based on key
+:rtype: string
+"""
 def get_label_for_property(key):
     return PROPERTY_LABEL_MAP.get(key, key)
 
+""" query_graphdb function enables to query the data present in GraphDB Repository
+
+Based on the template chosen - SPARQL query is constructed to retrieve data from GraphDB repository
+templates: 
+max_value_query - retrieve maximum value present in the graph for a certain quality of polymer specified in property_label
+min_value_query - retrieve minimum value present in the graph for a certain quality of polymer specified in property_label
+multi_property_comparison - compare values of multiple properties/qualities of polymer 
+multi_similarity - compare and find similar polymers based on chosen qualities
+filter_by_single_quality - retrieve quality values which are above, below or equal to a given threshold value by the end user
+:param No parameters
+:type [ParamName]: [ParamType](, optional)
+...
+:raises [ErrorType]: [ErrorDescription]
+...
+:return: Query results retrieved from Graph DB Repository as a table along with links to download the results as CSV or Excel
+:rtype: Form
+"""
+from app.saved_queries import save_query_auto, get_query_by_name
 @bp.route('/query', methods=['GET', 'POST'])
 def query_graphdb():
     if request.method == 'GET':
@@ -296,7 +390,7 @@ PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 
-SELECT ?object ?prop1_quality ?val1 ?prop2_quality ?val2 
+SELECT ?object ?property1 ?value1 ?unit1 ?property2 ?value2 ?unit2
 WHERE {{
   ?object_uri rdfs:label ?object .
 
@@ -304,23 +398,103 @@ WHERE {{
         iao:IAO_0000136 ?object_uri ;
         iao:IAO_0000221 ?p1 ;
         obi:OBI_0001938 ?vs1 .
-  ?p1 rdfs:label ?prop1_quality .
-  ?vs1 obi:OBI_0001937 ?val1 .
+  ?p1 rdfs:label ?property1 .
+  ?vs1 obi:OBI_0001937 ?value1 .
+  OPTIONAL{{
+  ?vs1 iao:IAO_0000039 ?unit1_iri .
+  ?unit1_iri rdfs:label ?unit1.}}
 
   ?smd2 rdf:type iao:IAO_0000032 ;
         iao:IAO_0000136 ?object_uri ;
         iao:IAO_0000221 ?p2 ;
         obi:OBI_0001938 ?vs2 .
-  ?p2 rdfs:label ?prop2_quality .
-  ?vs2 obi:OBI_0001937 ?val2 .
+  ?p2 rdfs:label ?property2 .
+  ?vs2 obi:OBI_0001937 ?value2 .
+  OPTIONAL{{
+  ?vs2 iao:IAO_0000039 ?unit2_iri .
+  ?unit2_iri rdfs:label ?unit2.}}
+  
+  VALUES ?property1 {{ "{prop1_label}" }}
+  VALUES ?property2 {{ "{prop2_label}" }}
 
-  VALUES ?prop1_quality {{ "{prop1_label}" }}
-  VALUES ?prop2_quality {{ "{prop2_label}" }}
-
-  FILTER(xsd:double(?val1) {op1} {val1})
-  FILTER(xsd:double(?val2) {op2} {val2})
+  FILTER(xsd:double(?value1) {op1} {val1})
+  FILTER(xsd:double(?value2) {op2} {val2})
 }}
 """
+    elif template == "multi_similarity":
+        # fetch form fields
+        material = request.form.get("material_label")
+        prop1 = request.form.get("property1_label")
+        prop2 = request.form.get("property2_label")
+        tol1 = request.form.get("tolerance1")
+        tol2 = request.form.get("tolerance2")
+
+        # build SPARQL
+        sparql_query = f"""
+PREFIX iao: <http://purl.obolibrary.org/obo/iao.owl/>
+PREFIX obi: <http://purl.obolibrary.org/obo/obi.owl/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?material ?material2_label 
+        ?prop1 ?value1 ?value1_other 
+       ?prop2 ?value2 ?value2_other
+WHERE {{
+  ?material1 rdfs:label "{material}" .
+
+  # Property 1
+  ?s1a iao:IAO_0000136 ?material1 ;
+       iao:IAO_0000221 ?prop1_uri ;
+       obi:OBI_0001938 ?vs1a .
+  ?prop1_uri rdfs:label "{prop1}" .
+  ?prop1_uri rdfs:label ?prop1.
+  ?vs1a obi:OBI_0001937 ?value1 .
+
+  # Property 2
+  ?s1b iao:IAO_0000136 ?material1 ;
+       iao:IAO_0000221 ?prop2_uri ;
+       obi:OBI_0001938 ?vs1b .
+  ?prop2_uri rdfs:label "{prop2}" .
+  ?prop2_uri rdfs:label ?hon run.pyprop2.
+  ?vs1b obi:OBI_0001937 ?value2 .
+
+  # Other materials property 1
+  ?s2a iao:IAO_0000136 ?material2 ;
+       iao:IAO_0000221 ?prop1_uri ;
+       obi:OBI_0001938 ?vs2a .
+  ?vs2a obi:OBI_0001937 ?value1_other .
+
+  # Other materials property 2
+  ?s2b iao:IAO_0000136 ?material2 ;
+       iao:IAO_0000221 ?prop2_uri ;
+       obi:OBI_0001938 ?vs2b .
+  ?vs2b obi:OBI_0001937 ?value2_other .
+
+  ?material2 rdfs:label ?material2_label .
+
+  FILTER(?material2 != ?material1)
+
+  FILTER(ABS(xsd:double(?value1) - xsd:double(?value1_other)) < {tol1})
+  FILTER(ABS(xsd:double(?value2) - xsd:double(?value2_other)) < {tol2})
+}}
+ORDER BY ?material2_label
+"""
+
+        # save the query
+        #saved_name = save_query_auto(sparql_query, "multi_similarity")
+
+        #results = run_sparql_query(repo_url, sparql_query, username, password)
+
+        # Ensure results list format
+        #if isinstance(results, dict):
+            #results = results.get("results", {}).get("bindings", [])
+
+        #return render_template(
+        #"query_results.html",
+        #results=results,
+        #saved_query_name=saved_name,
+        #template_name="multi_similarity"
+        #)
 
     elif template == "filter_by_single_quality":
         prop_label = get_label_for_property(request.form.get("property"))
@@ -359,7 +533,7 @@ WHERE {{
     PREFIX obi: <http://purl.obolibrary.org/obo/obi.owl/>
     PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
-    SELECT ?object ?quality ?numericvalue WHERE {{
+    SELECT ?object ?quality ?numericvalue ?unit WHERE {{
     ?smd rdf:type iao:IAO_0000032.
     ?smd iao:IAO_0000221 ?quality_uri.
     ?smd iao:IAO_0000136 ?object_uri.
@@ -367,6 +541,11 @@ WHERE {{
     ?valuespec obi:OBI_0001937 ?numericvalue.
     ?object_uri rdfs:label ?object.
     ?quality_uri rdfs:label ?quality.
+    
+    OPTIONAL{{
+    ?valuespec iao:IAO_0000039 ?unit_iri .
+    ?unit_iri rdfs:label ?unit.
+    }}
     VALUES ?quality {{ "{prop_label}" }}
     {filters}
     }}
@@ -375,6 +554,10 @@ WHERE {{
         return "Invalid template", 400
 
     print("\n✅ Generated SPARQL:\n", sparql_query)
+
+    # NEW: auto-save query
+    saved_name = save_query_auto(sparql_query, template)
+    print(f"Query auto-saved as {saved_name}")
 
     response = requests.post(
         GRAPHDB_ENDPOINT,
@@ -396,7 +579,110 @@ WHERE {{
     )
     #return jsonify(results)
 
+""" list_saved_queries function to retrieve all saved queries
 
+:param No Parameters
+...
+:return: json of all saved queries
+:rtype: json object
+"""
+@bp.route('/saved_queries', methods=['GET'])
+def list_saved_queries():
+    from app.saved_queries import load_saved_queries
+    return jsonify(load_saved_queries())
+
+""" get_saved_query function to retrieve a saved query
+
+:param name: query name
+:type name: string
+...
+:return: JSON Object of saved query
+:rtype: JSON Object
+"""
+@bp.route('/saved_queries/<name>', methods=['GET'])
+def get_saved_query(name):
+    q = get_query_by_name(name)
+    if not q:
+        return jsonify({"error": "Query not found"}), 404
+    return jsonify(q)
+
+""" run_saved_query function to run a saved query again
+
+:param name: query name
+:type name: string
+...
+:return: query results in html page with options to download the results as csv or excel
+:rtype: html page
+"""
+@bp.route('/run_saved_query/<name>', methods=['GET'])
+def run_saved_query(name):
+    q = get_query_by_name(name)
+    if not q:
+        return render_template("query_results.html", results=[], error="Query not found.")
+
+    sparql_query = q["sparql"]
+
+    repo_url = f"http://localhost:7200/repositories/{current_app.config['GRAPHDB_REPO']}"
+    username = current_app.config.get("GRAPHDB_USERNAME")
+    password = current_app.config.get("GRAPHDB_PASSWORD")
+
+    try:
+        raw = run_sparql_query(repo_url, sparql_query, username, password)
+
+        # --- ALWAYS normalize to list of bindings ---
+        if isinstance(raw, dict):
+            results = raw.get("results", {}).get("bindings", [])
+        elif isinstance(raw, list):
+            results = raw
+        else:
+            results = []
+
+        return render_template(
+            "query_results.html",
+            results=results,
+            saved_query_name=name,
+            sparql=sparql_query,
+            template_name=q.get("template")
+        )
+
+    except Exception as e:
+        return render_template("query_results.html", results=[], error=str(e))
+
+""" delete_saved_query function to delete a saved query
+
+:param name: query name
+:type name: string
+...
+:raises error: 404
+...
+:return: success message in JSON Object
+:rtype: JSON Object
+"""
+@bp.route('/delete_query/<name>', methods=['DELETE'])
+def delete_saved_query(name):
+    from app.saved_queries import delete_query, get_query_by_name
+    if not get_query_by_name(name):
+        return jsonify({"error": "Not found"}), 404
+    delete_query(name)
+    return jsonify({"success": True})
+
+""" query_graphdb function enables to query the data present in GraphDB Repository
+
+Based on the template chosen - SPARQL query is constructed to retrieve data from GraphDB repository
+templates: 
+max_value_query - retrieve maximum value present in the graph for a certain quality of polymer specified in property_label
+min_value_query - retrieve minimum value present in the graph for a certain quality of polymer specified in property_label
+multi_property_comparison - compare values of multiple properties/qualities of polymer 
+multi_similarity - compare and find similar polymers based on chosen qualities
+filter_by_single_quality - retrieve quality values which are above, below or equal to a given threshold value by the end user
+:param No parameters
+:type [ParamName]: [ParamType](, optional)
+...
+:raises [ErrorType]: [ErrorDescription]
+...
+:return: Query results retrieved from Graph DB Repository as a table along with links to download the results as CSV or Excel
+:rtype: Form
+"""
 @bp.route('/query_working', methods=['GET', 'POST'])
 def query_graphdb_working():
     if request.method == 'GET':
@@ -506,8 +792,8 @@ SELECT ?object ?quality ?numericvalue WHERE {{
         prop2_label = get_label_for_property(prop2_key)
 
         # Keep your existing VALUES filters
-        filters1 = values_filter("prop1_quality", prop1_label)
-        filters2 = values_filter("prop2_quality", prop2_label)
+        filters1 = values_filter("property1", prop1_label)
+        filters2 = values_filter("property2", prop2_label)
 
         # ---- NUMERIC FILTER BUILDER (minimal change) ----
         def build_numeric_filter(varname, comp, vlow, vhigh):
@@ -527,7 +813,7 @@ SELECT ?object ?quality ?numericvalue WHERE {{
         filters2 += "\n" + build_numeric_filter("val2", comp2, val2, val2b)
 
         where_clause = f'''
-SELECT ?object ?prop1_quality ?val1 ?prop2_quality ?val2 
+SELECT ?object ?property1 ?value1 ?property2 ?value2 
 WHERE {{
   ?object_uri rdfs:label ?object .
 
@@ -536,16 +822,16 @@ WHERE {{
         iao:IAO_0000136 ?object_uri ;
         iao:IAO_0000221 ?prop1_uri ;
         obi:OBI_0001938 ?valspec1 .
-  ?prop1_uri rdfs:label ?prop1_quality .
-  ?valspec1 obi:OBI_0001937 ?val1 .
+  ?prop1_uri rdfs:label ?property1 .
+  ?valspec1 obi:OBI_0001937 ?value1 .
 
   # Second measurement
   ?smd2 rdf:type iao:IAO_0000032 ;
         iao:IAO_0000136 ?object_uri ;
         iao:IAO_0000221 ?prop2_uri ;
         obi:OBI_0001938 ?valspec2 .
-  ?prop2_uri rdfs:label ?prop2_quality .
-  ?valspec2 obi:OBI_0001937 ?val2 .
+  ?prop2_uri rdfs:label ?property2 .
+  ?valspec2 obi:OBI_0001937 ?value2 .
 
   # Filters
   {filters1}
@@ -566,11 +852,89 @@ WHERE {{
 
         results = response.json().get("results", {}).get("bindings", [])
         return jsonify(results)
+
+    elif template == "multi_similarity":
+        # fetch form fields
+        material = request.form.get("material_label")
+        prop1 = request.form.get("property1_label")
+        prop2 = request.form.get("property2_label")
+        tol1 = request.form.get("tolerance1")
+        tol2 = request.form.get("tolerance2")
+
+        # build SPARQL
+        sparql_query = f"""
+PREFIX iao: <http://purl.obolibrary.org/obo/iao.owl/>
+PREFIX obi: <http://purl.obolibrary.org/obo/obi.owl/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?material2 ?material2_label 
+       ?value1 ?value1_other 
+       ?value2 ?value2_other
+WHERE {{
+  ?material1 rdfs:label "{material}" .
+
+  # Property 1
+  ?s1a iao:IAO_0000136 ?material1 ;
+       iao:IAO_0000221 ?prop1 ;
+       obi:OBI_0001938 ?vs1a .
+  ?prop1 rdfs:label "{prop1}" .
+  ?vs1a obi:OBI_0001937 ?value1 .
+
+  # Property 2
+  ?s1b iao:IAO_0000136 ?material1 ;
+       iao:IAO_0000221 ?prop2 ;
+       obi:OBI_0001938 ?vs1b .
+  ?prop2 rdfs:label "{prop2}" .
+  ?vs1b obi:OBI_0001937 ?value2 .
+
+  # Other materials property 1
+  ?s2a iao:IAO_0000136 ?material2 ;
+       iao:IAO_0000221 ?prop1 ;
+       obi:OBI_0001938 ?vs2a .
+  ?vs2a obi:OBI_0001937 ?value1_other .
+
+  # Other materials property 2
+  ?s2b iao:IAO_0000136 ?material2 ;
+       iao:IAO_0000221 ?prop2 ;
+       obi:OBI_0001938 ?vs2b .
+  ?vs2b obi:OBI_0001937 ?value2_other .
+
+  ?material2 rdfs:label ?material2_label .
+
+  FILTER(?material2 != ?material1)
+
+  FILTER(ABS(xsd:double(?value1) - xsd:double(?value1_other)) < {tol1})
+  FILTER(ABS(xsd:double(?value2) - xsd:double(?value2_other)) < {tol2})
+}}
+ORDER BY ?material2_label
+"""
+
+        # save the query
+        saved_name = save_query_auto(sparql_query, "multi_similarity")
+
+        results = run_sparql_query(repo_url, sparql_query, username, password)
+
+        # Ensure results list format
+        if isinstance(results, dict):
+            results = results.get("results", {}).get("bindings", [])
+
+        return render_template(
+        "query_results.html",
+        results=results,
+        saved_query_name=saved_name,
+        template_name="multi_similarity"
+        )
+
     else:
         return "Invalid template selected.", 400
 
+
     full_query = prefixes + where_clause
 
+    # Auto-save every query
+    saved_name = save_query_auto(full_query, template)
+    print(f"Query auto-saved as: {saved_name}")
     try:
         # debug: print constructed SPARQL
         print("DEBUG - Full SPARQL Query:\n", full_query)
@@ -584,7 +948,16 @@ WHERE {{
     except Exception as e:
         return f"An error occurred: {e}", 500
 
+""" get_slots function to get the slots from a csv file
 
+:param No Parameters
+:type No Parameters
+...
+:raises error: 500
+...
+:return: JSON Object of slots from filtered_slots.csv
+:rtype: JSON Object
+"""
 @bp.route('/get_slots', methods=['GET'])
 def get_slots():
     slots = []
@@ -601,6 +974,16 @@ def get_slots():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+""" get_object_graph function to visualize a sub graph using cytoscape - not working
+
+:param object_name - sub graph name
+:type No Parameters
+...
+:raises error: 500
+...
+:return: JSON Object 
+:rtype: JSON Object
+"""
 @bp.route('/graph/object/<object_name>', methods=['GET'])
 def get_object_graph(object_name):
     """
@@ -677,3 +1060,85 @@ def get_object_graph(object_name):
     except Exception as e:
         print(f"Graph fetch error: {e}")
         return jsonify({"error": str(e)}), 500
+
+""" query_multi_similarity function retrieves polymers which are similar in multiple property values 
+similarity is found using a threshold value specified by end user
+
+:param Multiple properties of Polymers chosen by end user along with threshold value
+:type strings for property_label and decimal for threshold value
+...
+:return: HTML Page of similar polymers with property and their values
+:rtype: HTML Page
+"""
+@bp.route("/query_multi_similarity", methods=["POST"])
+def query_multi_similarity():
+    from saved_queries import save_query_auto
+
+    material = request.form.get("material_label")
+    prop1 = request.form.get("property1_label")
+    prop2 = request.form.get("property2_label")
+    tol1 = request.form.get("tolerance1")
+    tol2 = request.form.get("tolerance2")
+
+    sparql = f"""
+PREFIX iao: <http://purl.obolibrary.org/obo/iao.owl/>
+PREFIX obi: <http://purl.obolibrary.org/obo/obi.owl/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?material2 ?material2_label 
+       ?value1 ?value1_other 
+       ?value2 ?value2_other
+WHERE {{
+  ?material1 rdfs:label "{material}" .
+
+  # Property 1 for reference
+  ?s1a iao:IAO_0000136 ?material1 ;
+       iao:IAO_0000221 ?prop1 ;
+       obi:OBI_0001938 ?vs1a .
+  ?prop1 rdfs:label "{prop1}" .
+  ?vs1a obi:OBI_0001937 ?value1 .
+
+  # Property 2 for reference
+  ?s1b iao:IAO_0000136 ?material1 ;
+       iao:IAO_0000221 ?prop2 ;
+       obi:OBI_0001938 ?vs1b .
+  ?prop2 rdfs:label "{prop2}" .
+  ?vs1b obi:OBI_0001937 ?value2 .
+
+  # Other materials - property 1
+  ?s2a iao:IAO_0000136 ?material2 ;
+       iao:IAO_0000221 ?prop1 ;
+       obi:OBI_0001938 ?vs2a .
+  ?vs2a obi:OBI_0001937 ?value1_other .
+
+  # Other materials - property 2
+  ?s2b iao:IAO_0000136 ?material2 ;
+       iao:IAO_0000221 ?prop2 ;
+       obi:OBI_0001938 ?vs2b .
+  ?vs2b obi:OBI_0001937 ?value2_other .
+
+  ?material2 rdfs:label ?material2_label .
+
+  FILTER(?material2 != ?material1)
+
+  # Similarity thresholds
+  FILTER(ABS(xsd:double(?value1) - xsd:double(?value1_other)) < {tol1})
+  FILTER(ABS(xsd:double(?value2) - xsd:double(?value2_other)) < {tol2})
+}}
+ORDER BY ?material2_label
+"""
+
+    # Auto-save query
+    saved_name = save_query_auto(sparql, "multi_similarity")
+
+    # Run query on GraphDB
+    results = run_sparql_query(sparql)
+
+    return render_template(
+        "query_results.html",
+        results=results,
+        sparql=sparql,
+        template_name="multi_similarity",
+        saved_query_name=saved_name
+    )
